@@ -6,7 +6,7 @@
       <button><router-link to="/scores">View High Scores</router-link></button>
     </div>
 
-    <h3 class="options">Please note that this is a work in progress. The game isn't quite working but the main mechanics are there. For the life of me I cannot figure out why the Ace of Diamonds won't show up (the file is with the rest of them I promise)</h3>
+    <h3 class="options">Please note that this is a work in progress. The game mechanics work, but I have yet to add scoring and checking the win conditions. In future labs I plan on adding those features as well as some other fun stuff.</h3>
   </div>
 </template>
 

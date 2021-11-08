@@ -7,24 +7,35 @@
   >
     <h1>Play (work in progress)</h1>
     <div class="board-head">
+      <div class="scored">
+        <div 
+          v-for="column, index in scored" :class="scored[index].length ? undefined : 'empty'" 
+          :key="index" @dragstart="startDrag($event, index, scored[index].length-1, 'scored')"
+          @drop="onDrop($event, index, 'scored')"
+        >
+          <img 
+            
+            :src="scored[index].length ? 
+            require(`../assets/${scored[index][scored[index].length-1].value}${scored[index][scored[index].length-1].suit}.png`) :
+            require('@/assets/purple_back.png')"
+          />
+        </div>
+      </div>
       <div class="deck">
         <div :class="deck.length ? undefined : 'empty'"  @click="drawCard">
           <img src="@/assets/purple_back.png" @dragstart.prevent />
         </div>
-        <div :class="drawn.length ? undefined : 'empty'" :draggable="!!drawn.length" @dragstart="startDrag($event, -1, drawn.length-1)">
+        <div :class="drawn.length ? undefined : 'empty'" :draggable="!!drawn.length" @dragstart="startDrag($event, -1, drawn.length-1, 'draw')">
           <img v-if="drawn.length" :src="require(`../assets/${drawn[drawn.length-1].value}${drawn[drawn.length-1].suit}.png`)" />
           <img v-else src="@/assets/purple_back.png" />
         </div>
-      </div>
-      <div class="scored">
-
       </div>
     </div>
     <div class="main-board">
       <div 
         v-for="column, colIndex in columns" class="column" 
         :key="colIndex" 
-        @drop="onDrop($event, colIndex)"
+        @drop="onDrop($event, colIndex, 'column')"
       >
         <div v-if="!column.unflipped.length && !column.flipped.length" class="empty">
           <img src="@/assets/purple_back.png" />
@@ -43,7 +54,7 @@
             v-for="card, cardIndex in column.flipped"
             class="card"
             draggable
-            @dragstart="startDrag($event, colIndex, cardIndex)"
+            @dragstart="startDrag($event, colIndex, cardIndex, 'column')"
             :key="cardIndex"
           >
             <img :src="require(`../assets/${card.value}${card.suit}.png`)" />
@@ -68,14 +79,13 @@ export default {
       columns: [],
       activeLocation: null,
       activeSiblings: [],
-      cardVals: ['A','2','3','4','5','6','7','8','9','10','J','Q','K'],
+      cardVals: ['1','2','3','4','5','6','7','8','9','10','J','Q','K'],
       scored: [[],[],[],[]]
     }
   },
   methods: {
     deal(deck) {
       this.shuffle(deck)
-      console.log(deck)
       let deckIndex = deck.length-1
       for(let i = 0; i < 7; i++) {
         this.columns.push({unflipped: [], flipped: []})
@@ -113,14 +123,17 @@ export default {
         column.unflipped.pop()
       }
     },
-    startDrag(evt, colIndex, cardIndex) {
+    startDrag(evt, colIndex, cardIndex, source) {
       this.activeLocation = {x: evt.pageX, y: evt.pageY}
 
       let columnEl = evt.target.parentElement
-      if(colIndex > -1) {
+      if(source === 'column') {
         for(let i = cardIndex; i < columnEl.children.length; i++) {
           this.activeSiblings.push({card: this.columns[colIndex].flipped[i], el: columnEl.children[i]})
         }
+      }
+      else if(source === 'scored') {
+        this.activeSiblings.push({card: this.scored[colIndex][cardIndex], el: evt.target})
       }
       else {
         this.activeSiblings.push({card: this.drawn[cardIndex], el: evt.target})
@@ -133,30 +146,40 @@ export default {
 
       evt.dataTransfer.setData('cardIndex', cardIndex)
       evt.dataTransfer.setData('fromCol', colIndex)
+      evt.dataTransfer.setData('source', source)
     },
     dragEnd() {
       this.activeSiblings.forEach(card => {
+        console.log('no style')
         card.el.style = undefined
       })
       this.activeLocation = null
       this.activeSiblings = []
     },
-    onDrop(evt, colIndex) {
-      const column = this.columns[colIndex]
+    onDrop(evt, colIndex, destType) {
+      const column = destType === 'scored' ? this.scored[colIndex] : this.columns[colIndex]
       const cardIndex = evt.dataTransfer.getData('cardIndex')
       const fromColIndex = evt.dataTransfer.getData('fromCol')
+      const source = evt.dataTransfer.getData('source')
 
-      if(this.canDrop(this.activeSiblings[0].card, column)) {
-        if(fromColIndex > -1)
+      if(this.canDrop(this.activeSiblings[0].card, column, destType === 'scored')) {
+        if(source === 'column') {
           this.columns[fromColIndex].flipped.splice(cardIndex)
+        }
+        else if(source === 'scored') {
+          this.scored[fromColIndex].pop()
+        }
         else {
           this.drawn.pop()
         }
         this.activeSiblings.forEach(card => {
-          column.flipped.push(card.card)
-          if(fromColIndex > -1)
-            card.el.remove()
-          else
+          destType === 'column' ? column.flipped.push(card.card) : this.scored[colIndex].push(card.card)
+          console.log(destType)
+          // if(fromColIndex > -1) {
+          //   console.log('remove', card.card)
+          //   // card.el.remove()
+          // }
+          // else
             card.el.style = undefined
         })
         this.activeSiblings = []
@@ -176,8 +199,14 @@ export default {
 				});
 			}
     },
-    canDrop(toDrop, column) {
-      if(column.flipped.length) {
+    canDrop(toDrop, column, isScored) {
+      if(isScored) {
+        if(column.length) {
+          const columnCard = column[column.length-1]
+          return toDrop.suit === columnCard.suit && (this.cardVals.indexOf(toDrop.value) - this.cardVals.indexOf(columnCard.value)) === 1
+        }
+      }
+      else if(column.flipped.length) {
         const columnCard = column.flipped[column.flipped.length-1]
         let altSuit = false
         if(toDrop.suit === 'D' || toDrop.suit === 'H')
@@ -186,19 +215,14 @@ export default {
           altSuit = columnCard.suit === 'D' || columnCard.suit === 'H'
 
         if(altSuit) {
-          return this.cardVals.indexOf(columnCard.value) - this.cardVals.indexOf(toDrop.value) === 1
+          return (this.cardVals.indexOf(columnCard.value) - this.cardVals.indexOf(toDrop.value)) === 1
         }
       }
-      else if(!column.unflipped.length && toDrop.value === 'K') {
-        return true
-      }
-      return false
+      return isScored ? toDrop.value === '1' : (!column.unflipped.length && toDrop.value === 'K')
     },
     drawCard() {
-      // console.log(this.deck)
       if(this.deck.length) {
         const card = this.deck.pop()
-        console.log(card)
         this.drawn.push(card)
       }
       else {
@@ -211,9 +235,24 @@ export default {
 </script>
 
 <style scoped>
+
+img {
+  max-width: 100px
+}
+
   .board-head {
     display: flex;
     justify-content: space-between;
+  }
+
+  .scored {
+    display: flex;
+    justify-content: left;
+    margin: 16px auto 16px 16px;
+  }
+
+  .scored div {
+    max-width: 100px
   }
 
   .deck {
@@ -223,7 +262,7 @@ export default {
     width: 250px;
   }
 
-  .deck img{
+  .deck img {
     max-width: 100px;
   }
 
