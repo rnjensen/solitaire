@@ -115,7 +115,7 @@ export default {
   },
   methods: {
     deal(deck) {
-      // this.shuffle(deck)
+      this.shuffle(deck)
       let deckIndex = deck.length-1
       for(let i = 0; i < 7; i++) {
         this.columns.push({unflipped: [], flipped: []})
